@@ -3,8 +3,6 @@ pub struct Day1;
 use crate::solution::Solution;
 use anyhow::{bail, Context, Error, Result};
 use itertools::Itertools;
-use std::iter::Map;
-use std::str::Lines;
 
 enum Dir {
     Left,
@@ -31,7 +29,7 @@ impl Dial {
     }
 
     fn turn_and_count(&self, dir: &Dir, amount: usize) -> (Self, usize) {
-        let next = self.turn(&dir, amount);
+        let next = self.turn(dir, amount);
         let full_turns = amount / Dial::SIZE;
         let crossed_zero = match dir {
             Dir::Left => next.position > self.position,
@@ -48,10 +46,10 @@ impl Dial {
     }
 }
 
-fn parse_input(input: &str) -> Map<Lines, fn(&str) -> Result<(Dir, usize), Error>> {
+fn parse_input(input: &str) -> impl Iterator<Item = Result<(Dir, usize), Error>> {
     input.lines().map(|line| {
         let (direction, amount) = line.split_at_checked(1).context("error splitting line")?;
-        let amount = amount.parse::<usize>()?;
+        let amount = amount.parse()?;
         let direction = match direction {
             "L" => Dir::Left,
             "R" => Dir::Right,
