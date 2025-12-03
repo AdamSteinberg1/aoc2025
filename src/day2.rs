@@ -7,7 +7,7 @@ use itertools::{Either, Itertools};
 use std::iter;
 
 fn count_digits(id: usize) -> usize {
-    id.checked_ilog10().unwrap_or(1) as usize + 1
+    id.checked_ilog10().unwrap_or(0) as usize + 1
 }
 
 fn first_factor(x: usize) -> usize {
