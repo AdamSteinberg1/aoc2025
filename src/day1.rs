@@ -1,7 +1,8 @@
+#[derive(Default)]
 pub struct Day1;
 
 use crate::solution::Solution;
-use anyhow::{bail, Context, Error, Result};
+use anyhow::{Context, Error, Result, bail};
 use itertools::Itertools;
 
 enum Dir {
@@ -60,7 +61,10 @@ fn parse_input(input: &str) -> impl Iterator<Item = Result<(Dir, usize), Error>>
 }
 
 impl Solution for Day1 {
-    fn part1(&self, input: &str) -> Result<usize> {
+    type Part1Output = usize;
+    type Part2Output = usize;
+
+    fn part1(&self, input: &str) -> Result<Self::Part1Output> {
         parse_input(input)
             .scan(Dial::new(50), |dial, res| {
                 Some(res.map(|(dir, amount)| {
@@ -72,7 +76,7 @@ impl Solution for Day1 {
             .process_results(|iter| iter.count())
     }
 
-    fn part2(&self, input: &str) -> Result<usize> {
+    fn part2(&self, input: &str) -> Result<Self::Part2Output> {
         parse_input(input)
             .fold_ok((Dial::new(50), 0), |(dial, sum), (dir, amount)| {
                 let (next, count) = dial.turn_and_count(&dir, amount);

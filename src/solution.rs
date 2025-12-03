@@ -1,6 +1,10 @@
 use anyhow::Result;
+use std::fmt::Display;
 
 pub trait Solution {
-    fn part1(&self, input: &str) -> Result<usize>;
-    fn part2(&self, input: &str) -> Result<usize>;
+    type Part1Output: Display;
+    type Part2Output: Display;
+
+    fn part1(&self, input: &str) -> Result<Self::Part1Output>;
+    fn part2(&self, input: &str) -> Result<Self::Part2Output>;
 }
