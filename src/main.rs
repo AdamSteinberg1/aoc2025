@@ -1,12 +1,17 @@
 mod day1;
 mod day2;
+mod day3;
 mod solution;
 
 use crate::solution::Solution;
 use anyhow::{Context, Result};
 use std::{env, fs};
 
-static SOLVERS: &[fn(&str) -> Result<()>] = &[solve::<day1::Day1>, solve::<day2::Day2>];
+static SOLVERS: &[fn(&str) -> Result<()>] = &[
+    solve::<day1::Day1>,
+    solve::<day2::Day2>,
+    solve::<day3::Day3>,
+];
 
 fn main() -> Result<()> {
     let day_num = env::args().nth(1);
