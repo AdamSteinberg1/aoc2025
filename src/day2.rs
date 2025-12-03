@@ -1,14 +1,13 @@
 #[derive(Default)]
 pub struct Day2;
 
-use std::iter::{empty, successors};
-
 use crate::solution::Solution;
 use anyhow::{Context, Result};
 use itertools::{Either, Itertools};
+use std::iter;
 
 fn count_digits(id: usize) -> usize {
-    if id == 0 { 1 } else { id.ilog10() as usize + 1 }
+    id.checked_ilog10().unwrap_or(1) as usize + 1
 }
 
 fn first_factor(x: usize) -> usize {
@@ -25,15 +24,15 @@ fn first_factor(x: usize) -> usize {
 
 fn factors(x: usize) -> impl Iterator<Item = usize> {
     if x <= 1 {
-        return Either::Right(empty());
+        return Either::Right(iter::empty());
     }
 
     Either::Left(
-        successors(Some((x, first_factor(x))), |(remaining, factor)| {
-            if *remaining == *factor {
+        iter::successors(Some((x, first_factor(x))), |(remaining, factor)| {
+            if remaining == factor {
                 None
             } else {
-                let next_remaining = *remaining / factor;
+                let next_remaining = remaining / factor;
                 Some((next_remaining, first_factor(next_remaining)))
             }
         })
@@ -42,7 +41,7 @@ fn factors(x: usize) -> impl Iterator<Item = usize> {
     )
 }
 
-fn is_repetitions(id: usize, num_chunks: usize) -> bool {
+fn is_repetition(id: usize, num_chunks: usize) -> bool {
     if num_chunks == 0 {
         return false;
     }
@@ -52,10 +51,10 @@ fn is_repetitions(id: usize, num_chunks: usize) -> bool {
         return false;
     }
 
-    let chunk_size = digit_count / num_chunks;
-    let divisor = 10_usize.pow(chunk_size as u32);
+    let chunk_size = (digit_count / num_chunks) as u32;
+    let divisor = 10_usize.pow(chunk_size);
 
-    successors(Some(id), |&current| {
+    iter::successors(Some(id), |&current| {
         let next = current / divisor;
         (next > 0).then_some(next)
     })
@@ -63,8 +62,9 @@ fn is_repetitions(id: usize, num_chunks: usize) -> bool {
     .all_equal()
 }
 
-fn is_any_repetitions(id: usize) -> bool {
-    factors(count_digits(id)).any(|chunk| is_repetitions(id, chunk))
+fn is_any_repetition(id: usize) -> bool {
+    let digit_count = count_digits(id);
+    factors(digit_count).any(|chunk| is_repetition(id, chunk))
 }
 
 fn solve(input: &str, is_invalid: fn(usize) -> bool) -> Result<usize> {
@@ -86,10 +86,10 @@ impl Solution for Day2 {
     type Part2Output = usize;
 
     fn part1(&self, input: &str) -> Result<Self::Part1Output> {
-        solve(input, |id| is_repetitions(id, 2))
+        solve(input, |id| is_repetition(id, 2))
     }
 
     fn part2(&self, input: &str) -> Result<Self::Part2Output> {
-        solve(input, is_any_repetitions)
+        solve(input, is_any_repetition)
     }
 }
