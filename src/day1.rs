@@ -62,8 +62,6 @@ fn parse_input(input: &str) -> impl Iterator<Item = Result<(Dir, usize), Error>>
 
 impl Solution for Day1 {
     type Part1Output = usize;
-    type Part2Output = usize;
-
     fn part1(&self, input: &str) -> Result<Self::Part1Output> {
         parse_input(input)
             .scan(Dial::new(50), |dial, res| {
@@ -76,6 +74,7 @@ impl Solution for Day1 {
             .process_results(|iter| iter.count())
     }
 
+    type Part2Output = usize;
     fn part2(&self, input: &str) -> Result<Self::Part2Output> {
         parse_input(input)
             .fold_ok((Dial::new(50), 0), |(dial, sum), (dir, amount)| {

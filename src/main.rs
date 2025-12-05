@@ -1,16 +1,18 @@
 mod day1;
 mod day2;
 mod day3;
+mod day4;
 mod solution;
 
 use crate::solution::Solution;
 use anyhow::{Context, Result};
-use std::{env, fs};
+use std::{env, fmt, fs, time};
 
-static SOLVERS: &[fn(&str) -> Result<()>] = &[
+const SOLVERS: &[fn(&str) -> Result<()>] = &[
     solve::<day1::Day1>,
     solve::<day2::Day2>,
     solve::<day3::Day3>,
+    solve::<day4::Day4>,
 ];
 
 fn main() -> Result<()> {
@@ -26,10 +28,24 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn solve<T: Solution + Default>(input: &str) -> Result<()> {
+fn solve<T: Solution>(input: &str) -> Result<()> {
     let solution = T::default();
-    println!("Part 1: {}", solution.part1(input)?);
-    println!("Part 2: {}", solution.part2(input)?);
+    print!("Part 1: ");
+    print_with_runtime(|| solution.part1(input))?;
+    print!("Part 2: ");
+    print_with_runtime(|| solution.part2(input))?;
+    Ok(())
+}
+
+fn print_with_runtime<F, T>(part: F) -> Result<()>
+where
+    F: FnOnce() -> Result<T>,
+    T: fmt::Display,
+{
+    let now = time::Instant::now();
+    let result = part()?;
+    let elapsed = now.elapsed();
+    println!("{}\t{:.2?}", result, elapsed);
     Ok(())
 }
 

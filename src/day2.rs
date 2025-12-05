@@ -83,12 +83,11 @@ fn solve(input: &str, is_invalid: fn(usize) -> bool) -> Result<usize> {
 
 impl Solution for Day2 {
     type Part1Output = usize;
-    type Part2Output = usize;
-
     fn part1(&self, input: &str) -> Result<Self::Part1Output> {
         solve(input, |id| is_repetition(id, 2))
     }
 
+    type Part2Output = usize;
     fn part2(&self, input: &str) -> Result<Self::Part2Output> {
         solve(input, is_any_repetition)
     }
