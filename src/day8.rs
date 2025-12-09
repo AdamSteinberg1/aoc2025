@@ -4,7 +4,6 @@ use itertools::Itertools;
 use petgraph::unionfind::UnionFind;
 use std::str::FromStr;
 
-#[derive(Clone, Eq, PartialEq, Hash, Debug)]
 struct Point {
     x: usize,
     y: usize,
