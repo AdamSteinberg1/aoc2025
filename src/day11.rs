@@ -1,5 +1,6 @@
 use crate::solution::Solution;
 use anyhow::{Context, Result};
+use memoize::memoize;
 use std::collections::HashMap;
 
 type Node = [u8; 3];
@@ -28,7 +29,8 @@ fn parse_graph(input: &str) -> Result<HashMap<Node, Vec<Node>>> {
         .collect()
 }
 
-fn count_all_paths(start: Node, target: Node, graph: &HashMap<Node, Vec<Node>>) -> usize {
+#[memoize(Ignore: graph)]
+fn count_paths(start: Node, target: Node, graph: &HashMap<Node, Vec<Node>>) -> usize {
     //depth first search
     if start == target {
         return 1;
@@ -37,47 +39,8 @@ fn count_all_paths(start: Node, target: Node, graph: &HashMap<Node, Vec<Node>>) 
         .get(&start)
         .into_iter()
         .flatten()
-        .map(|&neighbor| count_all_paths(neighbor, target, graph))
+        .map(|&neighbor| count_paths(neighbor, target, graph))
         .sum()
-}
-
-fn count_paths_with_dac_fft(
-    state: (Node, bool, bool),
-    target: Node,
-    graph: &HashMap<Node, Vec<Node>>,
-    cache: &mut HashMap<(Node, bool, bool), usize>,
-) -> usize {
-    if let Some(&result) = cache.get(&state) {
-        return result;
-    }
-
-    let (current, visited_dac, visited_fft) = state;
-    let visited_dac = visited_dac || current == *b"dac";
-    let visited_fft = visited_fft || current == *b"fft";
-
-    let result = if current == target {
-        if visited_dac && visited_fft { 1 } else { 0 }
-    } else {
-        graph
-            .get(&current)
-            .into_iter()
-            .flatten()
-            .map(|&neighbor| {
-                let next_state = (neighbor, visited_dac, visited_fft);
-                count_paths_with_dac_fft(next_state, target, graph, cache)
-            })
-            .sum()
-    };
-
-    cache.insert(state, result);
-    result
-}
-
-fn count_valid_paths(start: Node, target: Node, graph: &HashMap<Node, Vec<Node>>) -> usize {
-    // a path is valid if it visits 'dac' and 'fft'
-    let mut cache = HashMap::new();
-    let initial_state = (start, false, false);
-    count_paths_with_dac_fft(initial_state, target, graph, &mut cache)
 }
 
 #[derive(Default)]
@@ -86,12 +49,26 @@ impl Solution for Day11 {
     type Part1Output = usize;
     fn part1(&self, input: &str) -> Result<Self::Part1Output> {
         let graph = parse_graph(input)?;
-        Ok(count_all_paths(*b"you", *b"out", &graph))
+        Ok(count_paths(*b"you", *b"out", &graph))
     }
 
     type Part2Output = usize;
     fn part2(&self, input: &str) -> Result<Self::Part2Output> {
         let graph = parse_graph(input)?;
-        Ok(count_valid_paths(*b"svr", *b"out", &graph))
+
+        // svr → dac → fft → out
+        let svr_to_dac = count_paths(*b"svr", *b"dac", &graph);
+        let dac_to_fft = count_paths(*b"dac", *b"fft", &graph);
+        let fft_to_out = count_paths(*b"fft", *b"out", &graph);
+        let paths_via_dac_first = svr_to_dac * dac_to_fft * fft_to_out;
+
+        // svr → fft → dac → out
+        let svr_to_fft = count_paths(*b"svr", *b"fft", &graph);
+        let fft_to_dac = count_paths(*b"fft", *b"dac", &graph);
+        let dac_to_out = count_paths(*b"dac", *b"out", &graph);
+        let paths_via_fft_first = svr_to_fft * fft_to_dac * dac_to_out;
+
+        let total_paths = paths_via_dac_first + paths_via_fft_first;
+        Ok(total_paths)
     }
 }
