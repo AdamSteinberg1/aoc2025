@@ -8,6 +8,7 @@ mod day7;
 mod day8;
 mod day9;
 mod day10;
+mod day11;
 mod solution;
 
 use crate::solution::Solution;
@@ -24,7 +25,8 @@ const SOLVERS: &[fn(&str) -> Result<()>] = &[
     solve::<day7::Day7>,
     solve::<day8::Day8>,
     solve::<day9::Day9>,
-    solve::<day10::Day10>
+    solve::<day10::Day10>,
+    solve::<day11::Day11>,
 ];
 
 fn main() -> Result<()> {
