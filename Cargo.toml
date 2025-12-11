@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.100"
+good_lp = "1.14.2"
 itertools = "0.14.0"
 num-traits = "0.2.19"
 petgraph = "0.8.3"
