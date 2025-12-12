@@ -1,94 +1,80 @@
-#[derive(Default)]
-pub struct Day2;
-
 use crate::solution::Solution;
 use anyhow::{Context, Result};
-use itertools::{Either, Itertools};
-use std::iter;
+use itertools::Itertools;
+use std::ops::RangeInclusive;
 
 fn count_digits(id: usize) -> usize {
-    id.checked_ilog10().unwrap_or(0) as usize + 1
+    id.checked_ilog10().map(|log| log + 1).unwrap_or(1) as usize
 }
 
-fn first_factor(x: usize) -> usize {
-    if x.is_multiple_of(2) {
-        return 2;
-    }
+fn repeated_numbers(
+    range: RangeInclusive<usize>,
+    repetition_count: usize,
+) -> impl Iterator<Item = usize> {
+    let &start = range.start();
+    let &end = range.end();
 
-    (1..)
-        .map(|m| 2 * m + 1)
-        .take_while(|&n| n * n <= x)
-        .find(|&n| x.is_multiple_of(n))
-        .unwrap_or(x)
+    // Calculate the number of digits in the repeated chunk
+    let chunk_digit_count = count_digits(end) / repetition_count;
+
+    // Calculate the factor we will multiply our base number by
+    let pow10_total = 10usize.pow((chunk_digit_count * repetition_count) as u32);
+    let pow10_section = 10usize.pow(chunk_digit_count as u32);
+    let factor = (pow10_total - 1) / (pow10_section - 1);
+
+    // The base number must have chunk_digit_count digits
+    let min_base_from_digits = 10usize.pow((chunk_digit_count - 1) as u32);
+    let max_base_from_digits = pow10_section - 1;
+
+    // The base number must also produce values within our range
+    let min_k_from_range = start.div_ceil(factor);
+    let max_k_from_range = end / factor;
+
+    // Combine both constraints
+    let min_base = min_base_from_digits.max(min_k_from_range);
+    let max_base = max_base_from_digits.min(max_k_from_range);
+
+    (min_base..=max_base)
+        .map(move |base_num| base_num * factor)
+        .skip_while(move |&n| n < start)
+        .take_while(move |&n| n <= end)
 }
 
-fn factors(x: usize) -> impl Iterator<Item = usize> {
-    if x <= 1 {
-        return Either::Right(iter::empty());
-    }
-
-    Either::Left(
-        iter::successors(Some((x, first_factor(x))), |(remaining, factor)| {
-            if remaining == factor {
-                None
-            } else {
-                let next_remaining = remaining / factor;
-                Some((next_remaining, first_factor(next_remaining)))
-            }
-        })
-        .map(|(_, factor)| factor)
-        .dedup(),
-    )
+fn invalid_numbers(range: RangeInclusive<usize>) -> impl Iterator<Item = usize> {
+    let max_digit_count = count_digits(*range.end());
+    (2..=max_digit_count)
+        .flat_map(move |num| repeated_numbers(range.clone(), num))
+        .sorted()
+        .dedup()
 }
 
-fn is_repetition(id: usize, num_chunks: usize) -> bool {
-    if num_chunks == 0 {
-        return false;
-    }
-
-    let digit_count = count_digits(id);
-    if !digit_count.is_multiple_of(num_chunks) {
-        return false;
-    }
-
-    let chunk_size = (digit_count / num_chunks) as u32;
-    let divisor = 10_usize.pow(chunk_size);
-
-    iter::successors(Some(id), |&current| {
-        let next = current / divisor;
-        (next > 0).then_some(next)
-    })
-    .map(|chunk| chunk % divisor)
-    .all_equal()
-}
-
-fn is_any_repetition(id: usize) -> bool {
-    let digit_count = count_digits(id);
-    factors(digit_count).any(|chunk| is_repetition(id, chunk))
-}
-
-fn solve(input: &str, is_invalid: fn(usize) -> bool) -> Result<usize> {
+fn solve<F, I>(input: &str, invalid_number_generator: F) -> Result<usize>
+where
+    F: Fn(RangeInclusive<usize>) -> I,
+    I: Iterator<Item = usize>,
+{
     input
         .split(',')
         .map(|range| {
             let (start, end) = range.split_once('-').context("error parsing range")?;
             let start = start.trim().parse()?;
             let end = end.trim().parse()?;
-            Ok(start..=end)
+            let sum: usize = invalid_number_generator(start..=end).sum();
+            Ok(sum)
         })
-        .flatten_ok()
-        .filter_ok(|&id| is_invalid(id))
         .sum()
 }
 
+#[derive(Default)]
+pub struct Day2;
 impl Solution for Day2 {
     type Part1Output = usize;
     fn part1(&self, input: &str) -> Result<Self::Part1Output> {
-        solve(input, |id| is_repetition(id, 2))
+        solve(input, |range| repeated_numbers(range, 2))
     }
 
     type Part2Output = usize;
     fn part2(&self, input: &str) -> Result<Self::Part2Output> {
-        solve(input, is_any_repetition)
+        solve(input, invalid_numbers)
     }
 }
