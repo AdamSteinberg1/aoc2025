@@ -1,11 +1,14 @@
+use Entry::Vacant;
 use crate::solution::Solution;
 use anyhow::{bail, Context, Result};
+use good_lp::Solution as LpSolution;
+use good_lp::{default_solver, variable, Expression, ProblemVariables, SolverModel};
+use std::collections::hash_map::Entry;
 use std::collections::{HashMap, VecDeque};
 use std::str::FromStr;
-use good_lp::{default_solver, variable, Expression, ProblemVariables, SolverModel};
-use good_lp::Solution as LpSolution;  // to avoid colliding with Solution trait
+// to avoid colliding with Solution trait
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Default)]
 struct LightState(u16);
 
 impl FromStr for LightState {
@@ -22,13 +25,7 @@ impl FromStr for LightState {
                 };
                 Ok((acc >> 1) | (new_bit << 15))
             })
-            .map(|inner| Self(inner))
-    }
-}
-
-impl Default for LightState {
-    fn default() -> Self {
-        Self(0)
+            .map(Self)
     }
 }
 
@@ -90,8 +87,8 @@ fn count_button_presses(target: LightState, buttons: &[Vec<usize>]) -> Option<us
         let current_dist = distances[&state];
         for button in buttons {
             let next_state = state.press_button(button);
-            if !distances.contains_key(&next_state) {
-                distances.insert(next_state, current_dist + 1);
+            if let Vacant(entry) = distances.entry(next_state) {
+                entry.insert(current_dist + 1);
                 queue.push_back(next_state);
             }
         }
