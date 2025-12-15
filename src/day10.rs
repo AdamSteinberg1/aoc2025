@@ -1,45 +1,49 @@
-use Entry::Vacant;
 use crate::solution::Solution;
-use anyhow::{bail, Context, Result};
-use good_lp::Solution as LpSolution;
-use good_lp::{default_solver, variable, Expression, ProblemVariables, SolverModel};
-use std::collections::hash_map::Entry;
+use anyhow::{bail, ensure, Context, Result};
+use itertools::Itertools;
+use std::collections::hash_map::Entry::Vacant;
 use std::collections::{HashMap, VecDeque};
 use std::str::FromStr;
-// to avoid colliding with Solution trait
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Default)]
-struct LightState(u16);
+struct BitSequence(u16);
 
-impl FromStr for LightState {
+impl FromStr for BitSequence {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self> {
         s.chars()
-            .rev()
-            .try_fold(0u16, |acc, c| {
-                let new_bit = match c {
-                    '#' => 1,
-                    '.' => 0,
+            .map(|c| {
+                Ok(match c {
+                    '#' => true,
+                    '.' => false,
                     _ => bail!("invalid character: {}", c),
-                };
-                Ok((acc >> 1) | (new_bit << 15))
+                })
             })
-            .map(Self)
+            .process_results(|iter| iter.collect())
     }
 }
 
-impl LightState {
-    fn press_button(&self, button: &[usize]) -> Self {
+impl FromIterator<bool> for BitSequence {
+    fn from_iter<I: IntoIterator<Item = bool>>(iter: I) -> Self {
+        let value = iter
+            .into_iter()
+            .take(16)
+            .enumerate()
+            .fold(0u16, |acc, (i, b)| acc | ((b as u16) << (15 - i)));
+        Self(value)
+    }
+}
+
+impl BitSequence {
+    fn toggle_bits(&self, indices: &[usize]) -> Self {
         let Self(inner) = self;
-        let modified = button
-            .iter()
-            .fold(*inner, |acc, &num| acc ^ (1 << (15 - num)));
-        Self(modified)
+        let toggled = indices.iter().fold(*inner, |acc, &i| acc ^ (1 << (15 - i)));
+        Self(toggled)
     }
 }
 
-fn parse_line(line: &str) -> Result<(LightState, Vec<Vec<usize>>, Vec<u32>)> {
+fn parse_line(line: &str) -> Result<(BitSequence, Vec<Vec<usize>>, Vec<usize>)> {
     let (lights, buttons, joltages) = line
         .split_once(']')
         .and_then(|(lights, rest)| {
@@ -74,9 +78,9 @@ fn parse_button(button: &str) -> Result<Vec<usize>> {
     Ok(nums)
 }
 
-fn count_button_presses(target: LightState, buttons: &[Vec<usize>]) -> Option<usize> {
-    //breadth first search
-    let start = LightState::default(); //lights are all off
+fn count_button_presses(target: BitSequence, buttons: &[Vec<usize>]) -> Option<usize> {
+    //breadth-first search
+    let start = BitSequence::default(); //lights are all off
     let mut queue = VecDeque::from([start]);
     let mut distances = HashMap::from([(start, 0usize)]);
 
@@ -86,7 +90,7 @@ fn count_button_presses(target: LightState, buttons: &[Vec<usize>]) -> Option<us
         }
         let current_dist = distances[&state];
         for button in buttons {
-            let next_state = state.press_button(button);
+            let next_state = state.toggle_bits(button);
             if let Vacant(entry) = distances.entry(next_state) {
                 entry.insert(current_dist + 1);
                 queue.push_back(next_state);
@@ -96,35 +100,86 @@ fn count_button_presses(target: LightState, buttons: &[Vec<usize>]) -> Option<us
     None
 }
 
-fn solve_machine(buttons: &[Vec<usize>], joltages: &[u32]) -> Result<usize> {
-    let mut vars = ProblemVariables::new();
+// compute costs for all button combinations, grouped by parity pattern
+// returns: parity_pattern -> list of (counts, cost) pairs
+fn button_combination_costs(
+    buttons: &[Vec<usize>],
+) -> HashMap<BitSequence, Vec<(Vec<usize>, usize)>> {
+    let num_counters = buttons.iter().flatten().max().copied().unwrap_or_default() + 1;
 
-    // Create variables for each button
-    // These variable represent the amount of times that button needs to be pressed
-    let button_vars = vars.add_vector(variable().integer().min(0), buttons.len());
+    // generate all button combinations with their parity patterns and costs
+    (0..buttons.len())
+        .powerset()
+        .map(|button_indices| {
+            let cost = button_indices.len();
+            let counts: Vec<usize> = (0..num_counters)
+                .map(|i| {
+                    button_indices
+                        .iter()
+                        .filter(|&&btn_idx| buttons[btn_idx].contains(&i))
+                        .count()
+                })
+                .collect();
+            let parity_pattern = counts
+                .iter()
+                .map(|&count| !count.is_multiple_of(2))
+                .collect();
+            (parity_pattern, (counts, cost))
+        })
+        .into_group_map()
+}
 
-    // for each counter the final joltage equals the sum of all the button presses that affect it
-    let constraints = joltages.iter().enumerate().map(|(joltage_idx, &joltage)| {
-        let expr: Expression = button_vars
-            .iter()
-            .zip(buttons)
-            .filter(|(_, button)| button.contains(&joltage_idx))
-            .map(|(&var, _)| var)
-            .sum();
-        expr.eq(joltage)
-    });
+fn solve_recursive(
+    goal: &[usize],
+    costs: &HashMap<BitSequence, Vec<(Vec<usize>, usize)>>,
+    cache: &mut HashMap<Vec<usize>, usize>,
+) -> usize {
+    // base case: all zeros
+    if goal.iter().all(|&x| x == 0) {
+        return 0;
+    }
 
-    // objective: sum of all button presses
-    let objective: Expression = button_vars.iter().copied().sum();
+    if let Some(&cached) = cache.get(goal) {
+        return cached;
+    }
 
-    let mut problem = vars
-        .minimise(&objective) // find minimum number of button presses
-        .using(default_solver)
-        .with_all(constraints);
-    problem.set_parameter("log", "0");
+    // get parity pattern of current goal
+    let parity_pattern: BitSequence = goal.iter().map(|x| !x.is_multiple_of(2)).collect();
 
-    let solution = problem.solve()?;
-    Ok(solution.eval(objective) as usize)
+    // try all combinations that match this parity
+    let answer = costs
+        .get(&parity_pattern)
+        .into_iter()
+        .flatten()
+        .filter(|(counts, _)| counts.iter().zip(goal).all(|(&p, &g)| p <= g))
+        .map(|(counts, cost)| {
+            // calculate new goal: (goal - count) / 2
+            let new_goal: Vec<_> = counts
+                .iter()
+                .zip(goal)
+                .map(|(&c, &g)| (g - c) / 2)
+                .collect();
+
+            let recursive_cost = solve_recursive(&new_goal, costs, cache);
+            cost.saturating_add(recursive_cost.saturating_mul(2))
+        })
+        .min()
+        .unwrap_or(usize::MAX);
+
+    cache.insert(goal.to_owned(), answer);
+    answer
+}
+
+fn solve_machine(buttons: &[Vec<usize>], joltages: &[usize]) -> Result<usize> {
+    let costs = button_combination_costs(buttons);
+    let mut cache = HashMap::new();
+    let answer = solve_recursive(joltages, &costs, &mut cache);
+    ensure!(
+        answer < usize::MAX,
+        "No solution found for joltages {:?}",
+        joltages
+    );
+    Ok(answer)
 }
 
 #[derive(Default)]
